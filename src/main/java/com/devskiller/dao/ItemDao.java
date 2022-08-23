@@ -2,8 +2,15 @@ package com.devskiller.dao;
 
 import com.devskiller.model.Item;
 import com.devskiller.model.Review;
+import org.hibernate.query.Query;
 import org.springframework.orm.hibernate5.support.HibernateDaoSupport;
 
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Join;
+import javax.persistence.criteria.JoinType;
+import javax.persistence.criteria.ParameterExpression;
+import javax.persistence.criteria.Root;
 import javax.transaction.Transactional;
 import java.util.ArrayList;
 import java.util.List;
@@ -71,7 +78,7 @@ public class ItemDao extends HibernateDaoSupport {
 //                .setParameter(1, rating)
 //                .getResultList();
 
-        //third solution - malformed numeric constant
+//        //third solution - malformed numeric constant
 //        CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
 //        CriteriaQuery<Item> criteriaQuery = criteriaBuilder.createQuery(Item.class);
 //        Root<Item> item = criteriaQuery.from(Item.class);
@@ -92,24 +99,43 @@ public class ItemDao extends HibernateDaoSupport {
 //        query.setParameter(parameter, rating.doubleValue());
 //        List<Item> items = query.getResultList();
 
-        //working solution, but low DB efficiency
-        List<Item> items = new ArrayList<>();
+        //fourth attempt - criteriabuilder - join instead of fetch, removed .setParameter method
+        CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
+        CriteriaQuery<Item> criteriaQuery = criteriaBuilder.createQuery(Item.class);
+        Root<Item> item = criteriaQuery.from(Item.class);
+        Join<Object, Object> reviews = item.join("reviews", JoinType.LEFT);
+        criteriaQuery.select(item)
+                .groupBy(item.get("id"),
+                        item.get("description"),
+                        item.get("title")
+                )
+                .having(criteriaBuilder.lessThan(
+                        criteriaBuilder.avg(reviews.get("rating")),
+                        rating.doubleValue()
+                ));
 
-        Map<Item, List<Review>> reviewsByItemId = currentSession().createQuery(FIND_REVIEWS_QUERY, Review.class)
-                .stream()
-                .collect(Collectors.groupingBy(Review::getItem));
+        Query<Item> query = currentSession().createQuery(criteriaQuery);
+        List<Item> items = query.getResultList();
 
-        reviewsByItemId.forEach(
-                (item, reviews) -> {
-                    double sumOfRating = getSumOfRating(reviews);
 
-                    double avg = sumOfRating / reviews.size();
-
-                    if (avg < rating.doubleValue()) {
-                        items.add(item);
-                    }
-                }
-        );
+//        //working solution, but low DB efficiency
+//        List<Item> items = new ArrayList<>();
+//
+//        Map<Item, List<Review>> reviewsByItemId = currentSession().createQuery(FIND_REVIEWS_QUERY, Review.class)
+//                .stream()
+//                .collect(Collectors.groupingBy(Review::getItem));
+//
+//        reviewsByItemId.forEach(
+//                (item, reviews) -> {
+//                    double sumOfRating = getSumOfRating(reviews);
+//
+//                    double avg = sumOfRating / reviews.size();
+//
+//                    if (avg < rating.doubleValue()) {
+//                        items.add(item);
+//                    }
+//                }
+//        );
 
         return items;
     }
