@@ -25,19 +25,22 @@ public class ItemDao extends HibernateDaoSupport {
     private static final String FIND_REVIEWS_QUERY = "SELECT r FROM Review r ORDER BY r.id";
 
 
-    private static final String FIND_ITEMS_BY_RATING = "SELECT i FROM Item i " +
+    private static final String FIND_ITEMS_BY_RATING =
+            "SELECT i FROM Item i " +
             "JOIN i.reviews r " +
             "WHERE AVG(r.rating) < :rtg GROUP BY i";
 
-    private static final String FIND_ITEMS_BY_RATING2 = "SELECT i FROM Item i " +
+    private static final String FIND_ITEMS_BY_RATING2 =
+            "SELECT i FROM Item i " +
             "LEFT JOIN Review r ON i.id=r.id " +
             "WHERE AVG(r.rating) < :rtg GROUP BY i";
 
     private static final String FIND_ITEMS_BY_RATING_NATIVE_QUERY =
-            "SELECT i.* FROM item i " +
-                    "LEFT JOIN review r ON i.id = r.item_id" +
-                    " WHERE AVG(r.rating) < ?1 GROUP BY i.id";
-
+            "SELECT item.id, item.description, item.title " +
+                    "FROM item " +
+                    "LEFT JOIN review ON item.id = review.item_id " +
+                    "GROUP BY item.id, item.description, item.title " +
+                    "HAVING avg(review.rating)<:rtg";
 
     @Transactional
     public Page<Item> findItems(PageRequest pageRequest) {
@@ -73,10 +76,10 @@ public class ItemDao extends HibernateDaoSupport {
 ////                .setDouble("rtg", ratingDouble) //WARN  SQL Error: -458, SQLState: S1000
 //                .getResultList();
 
-//        second solution - user lacks privilege or object not found: ITEM in statement
-//        List resultList = currentSession().createNativeQuery(FIND_ITEMS_BY_RATING_NATIVE_QUERY)
-//                .setParameter(1, rating)
-//                .getResultList();
+        //second solution - native query
+        List<Item> items = currentSession().createNativeQuery(FIND_ITEMS_BY_RATING_NATIVE_QUERY, Item.class)
+                .setParameter("rtg", rating)
+                .getResultList();
 
 //        //third solution - malformed numeric constant
 //        CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
@@ -99,23 +102,23 @@ public class ItemDao extends HibernateDaoSupport {
 //        query.setParameter(parameter, rating.doubleValue());
 //        List<Item> items = query.getResultList();
 
-        //fourth attempt - criteriabuilder - join instead of fetch, removed .setParameter method
-        CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
-        CriteriaQuery<Item> criteriaQuery = criteriaBuilder.createQuery(Item.class);
-        Root<Item> item = criteriaQuery.from(Item.class);
-        Join<Object, Object> reviews = item.join("reviews", JoinType.LEFT);
-        criteriaQuery.select(item)
-                .groupBy(item.get("id"),
-                        item.get("description"),
-                        item.get("title")
-                )
-                .having(criteriaBuilder.lessThan(
-                        criteriaBuilder.avg(reviews.get("rating")),
-                        rating.doubleValue()
-                ));
-
-        Query<Item> query = currentSession().createQuery(criteriaQuery);
-        List<Item> items = query.getResultList();
+//        //fourth attempt - criteriabuilder - join instead of fetch, removed .setParameter method
+//        CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
+//        CriteriaQuery<Item> criteriaQuery = criteriaBuilder.createQuery(Item.class);
+//        Root<Item> item = criteriaQuery.from(Item.class);
+//        Join<Object, Object> reviews = item.join("reviews", JoinType.LEFT);
+//        criteriaQuery.select(item)
+//                .groupBy(item.get("id"),
+//                        item.get("description"),
+//                        item.get("title")
+//                )
+//                .having(criteriaBuilder.lessThan(
+//                        criteriaBuilder.avg(reviews.get("rating")),
+//                        rating.doubleValue()
+//                ));
+//
+//        Query<Item> query = currentSession().createQuery(criteriaQuery);
+//        List<Item> items = query.getResultList();
 
 
 //        //working solution, but low DB efficiency
