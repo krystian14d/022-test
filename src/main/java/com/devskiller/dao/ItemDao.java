@@ -26,14 +26,11 @@ public class ItemDao extends HibernateDaoSupport {
 
 
     private static final String FIND_ITEMS_BY_RATING =
-            "SELECT i FROM Item i " +
-            "JOIN i.reviews r " +
-            "WHERE AVG(r.rating) < :rtg GROUP BY i";
-
-    private static final String FIND_ITEMS_BY_RATING2 =
-            "SELECT i FROM Item i " +
-            "LEFT JOIN Review r ON i.id=r.id " +
-            "WHERE AVG(r.rating) < :rtg GROUP BY i";
+            "SELECT i " +
+                    "FROM Item i " +
+                    "LEFT JOIN Review r ON i.id = r.item.id " +
+                    "GROUP BY i.id, i.description, i.title " +
+                    "HAVING AVG(r.rating)<:rtg";
 
     private static final String FIND_ITEMS_BY_RATING_NATIVE_QUERY =
             "SELECT item.id, item.description, item.title " +
@@ -69,17 +66,17 @@ public class ItemDao extends HibernateDaoSupport {
     @Transactional
     public List<Item> findItemsWithAverageRatingLowerThan(Integer rating) {
 
-        //first solution - ClassCastException or SQL Error -458
-//        double ratingDouble = rating.doubleValue();
-//        List<Item> items = currentSession().createQuery(FIND_ITEMS_BY_RATING2, Item.class)
-//                .setParameter("rtg", ratingDouble) //ClassCastException - cannot cast Integer to Double
-////                .setDouble("rtg", ratingDouble) //WARN  SQL Error: -458, SQLState: S1000
-//                .getResultList();
-
-        //second solution - native query
-        List<Item> items = currentSession().createNativeQuery(FIND_ITEMS_BY_RATING_NATIVE_QUERY, Item.class)
-                .setParameter("rtg", rating)
+        //first solution - HPQL
+        double ratingDouble = rating.doubleValue();
+        List<Item> items = currentSession().createQuery(FIND_ITEMS_BY_RATING, Item.class)
+                .setParameter("rtg", ratingDouble) //ClassCastException - cannot cast Integer to Double
+//                .setDouble("rtg", ratingDouble) //WARN  SQL Error: -458, SQLState: S1000
                 .getResultList();
+
+//        //second solution - native query
+//        List<Item> items = currentSession().createNativeQuery(FIND_ITEMS_BY_RATING_NATIVE_QUERY, Item.class)
+//                .setParameter("rtg", rating)
+//                .getResultList();
 
 //        //third solution - malformed numeric constant
 //        CriteriaBuilder criteriaBuilder = currentSession().getCriteriaBuilder();
